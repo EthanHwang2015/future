@@ -19,3 +19,20 @@
 	pip install tensorflow_gpu-1.0.0-cp27-none-linux_x86_64.whl
 
 	
+def cal_kappa(y, pred, nclasses=3):
+    nclasses = max(y) - min(y) + 1 
+    o = np.zeros([nclasses,nclasses])
+    w =  np.zeros([nclasses,nclasses])
+    y_hist = np.zeros(nclasses)
+    pred_hist = np.zeros(nclasses)
+    for i in xrange(nclasses):
+        for j in xrange(nclasses):
+            w[i,j] = (i-j)**2
+    for i in xrange(y.shape[0]):
+        o[int(round(y[i])), int(round(pred[i]))] += 1
+        y_hist[int(round(y[i]))] += 1
+        pred_hist[int(round(pred[i]))] += 1
+    e = np.outer(y_hist, pred_hist)
+    rescale = np.sum(e) / np.sum(o)
+    return 1 - rescale * np.sum(o * w) / np.sum(e * w)
+
