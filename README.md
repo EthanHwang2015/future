@@ -9,5 +9,8 @@
 # cuda
 	wget "https://developer.nvidia.com/compute/cuda/8.0/Prod2/local_installers/cuda_8.0.61_375.26_linux-run"
 
-#tensorflow 
+# tensorflow 
+	wget https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow_gpu-1.0.0-cp27-none-linux_x86_64.whl
+	pip install tensorflow_gpu-1.0.0-cp27-none-linux_x86_64.whl
+
 	
