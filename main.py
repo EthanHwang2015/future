@@ -81,10 +81,10 @@ class Model:
       # conv_2 - conv_6
       layer_specs = [
         (self.filter_num * 2, 0.5),  # conv_2: [batch, 64, ngf] => [batch, 32, ngf * 2]
-        (self.filter_num * 4, 0.5),  # conv_3: [batch, 32, ngf * 2] => [batch, 16, ngf * 4]
-        (self.filter_num * 8, 0.5),  # conv_4: [batch, 16, ngf * 4] => [batch, 8, ngf * 8]
-        (self.filter_num * 8, 0.5),  # conv_5: [batch, 8, ngf * 8] => [batch, 4, ngf * 8]
-        (self.filter_num * 8, 0.5)  # conv_6: [batch, 4, ngf * 8] => [batch, 2, ngf * 8]
+        #(self.filter_num * 4, 0.5),  # conv_3: [batch, 32, ngf * 2] => [batch, 16, ngf * 4]
+        #(self.filter_num * 8, 0.5),  # conv_4: [batch, 16, ngf * 4] => [batch, 8, ngf * 8]
+        #(self.filter_num * 8, 0.5),  # conv_5: [batch, 8, ngf * 8] => [batch, 4, ngf * 8]
+        #(self.filter_num * 8, 0.5)  # conv_6: [batch, 4, ngf * 8] => [batch, 2, ngf * 8]
       ]
 
       # adding layers
@@ -111,7 +111,7 @@ class Model:
       h_fc1_drop = tf.nn.dropout(h_fc1, self.dropout)
 
       #fc2
-      result = tf.sigmoid(fully_connected(h_fc1_drop, 2, name='fc2'))
+      result = tf.sigmoid(fully_connected(h_fc1_drop, 3, name='fc2'))
 
       return result
 
@@ -136,33 +136,35 @@ class Model:
   #   print(grads_and_vars)
   #   train = optim.apply_gradients(grads_and_vars)
 
-  # @define_scope
-  # def p_loss(self):
-  #   outputs = self.prediction
-  #   loss = []
-  #   for i in range(len(outputs.get_shape().as_list())):
-  #     weights = tf.matmul(outputs[i], label[i])
+  @define_scope
+  def p_loss(self):
+    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.label),
+      logits=self.prediction)
+    return cross_entropy
 
-  #     def if_up():
-  #       return weights[0]
-  #     def if_down():
-  #       return weights[1]
+  @define_scope
+  def confusion(self):
+    confu = tf.confusion_matrix(tf.argmax(self.label, 1), tf.argmax(self.prediction, 1),
+        num_classes=3,
+        name = 'batch_confusion')
+    return confu
 
-  #     result = tf.cond(pred, if_true, if_false)
-
-  #     if (outputs[i][0] > outputs[i][1]):
-  #       if (label[i][0] > 0):
-  #         loss.append(outputs[i][1] * label[i][0])
-  #       else:
-  #         loss.append(outputs[i][0] * label[i][0])
-  #     else:
-  #       if (label[i][0] < 0):
-  #         loss.append(outputs[i][0] * label[i][0])
-  #       else:
-  #         loss.append(outputs[i][1] * label[i][0])
-  #   loss = tf.cast(loss, tf.float32)
-  #   loss = tf.abs(loss)
-  #   return loss
+def cal_kappa(y, pred, nclasses=3):
+    nclasses = max(y) - min(y) + 1 
+    o = np.zeros([nclasses,nclasses])
+    w =  np.zeros([nclasses,nclasses])
+    y_hist = np.zeros(nclasses)
+    pred_hist = np.zeros(nclasses)
+    for i in xrange(nclasses):
+        for j in xrange(nclasses):
+            w[i,j] = (i-j)**2
+    for i in xrange(y.shape[0]):
+        o[int(round(y[i])), int(round(pred[i]))] += 1
+        y_hist[int(round(y[i]))] += 1
+        pred_hist[int(round(pred[i]))] += 1
+    e = np.outer(y_hist, pred_hist)
+    rescale = np.sum(e) / np.sum(o)
+    return 1 - rescale * np.sum(o * w) / np.sum(e * w)
 
 def main():
   # Import data
@@ -170,7 +172,7 @@ def main():
 
   # Construct graph
   image = tf.placeholder(tf.float32, [None, 128, 6])
-  label = tf.placeholder(tf.float32, [None, 2])
+  label = tf.placeholder(tf.float32, [None, 3])
   dropout = tf.placeholder(tf.float32)
   model = Model(image, label, dropout=dropout)
 
@@ -181,14 +183,17 @@ def main():
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True
   with tf.Session(config=config) as sess:
-    #sess.run(tf.global_variables_initializer())
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     for i in range(500000):
-      images, labels = db.train.next_batch(10)
+      images, labels = db.train.next_batch(32)
       if i % 100 == 0:
         images_eval, labels_eval = db.test.next_batch(1000)
         accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
-        print('step %d, accuracy %g' % (i, accuracy))
+        loss = sess.run(model.p_loss, {image: images_eval, label: labels_eval, dropout: 1.0})
+        pred = sess.run(model.prediction, {image: images_eval, label: labels_eval, dropout: 1.0})
+        print('step %d, accuracy %g, loss %g, kappa %g' % (i, accuracy, loss, cal_kappa(np.argmax(labels_eval, axis=1), np.argmax(pred, axis=1))))
+        confusion = sess.run(model.confusion, {image: images_eval, label: labels_eval, dropout: 1.0})
+        print('confusion\n {}\n'.format(confusion))
       sess.run(model.optimize, {image: images, label: labels, dropout: 0.5})
 
       if i % 10000 == 0:
