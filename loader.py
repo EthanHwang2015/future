@@ -19,6 +19,8 @@ class DataSet(object):
 
     self.check_data(images, labels)
     seed1, seed2 = random_seed.get_seed(seed)
+    self._org_images = images
+    self._org_labels = labels
     self._images = images
     self._labels = labels
     self._epochs_completed = 0
@@ -45,15 +47,20 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
+  def balance(self, weights=[10,10,1]):
+    ys = np.argmax(self._org_labels, axis=1)
+    p = np.zeros(len(ys))
+    for i, weight in enumerate(weights):
+      p[ys==i] = weight
+    perm = np.random.choice(np.arange(len(ys)), size=len(ys), replace=True, p=np.array(p)/p.sum())
+    return self._org_images[perm], self._org_labels[perm]
+
   def next_batch(self, batch_size, shuffle=True):
     start = self._index_in_epoch
 
     # first epoch shuffle
     if self._epochs_completed == 0 and start == 0 and shuffle:
-      perm0 = np.arange(self._total_batches)
-      np.random.shuffle(perm0)
-      self._images = self.images[perm0]
-      self._labels = self.labels[perm0]
+      self._images, self._labels = self.balance()
 
     # next epoch
     if start + batch_size <= self._total_batches:
@@ -72,10 +79,7 @@ class DataSet(object):
 
       # shuffle for new epoch
       if shuffle:
-        perm = np.arange(self._total_batches)
-        np.random.shuffle(perm)
-        self._images = self.images[perm]
-        self._labels = self.labels[perm]
+        self._images, self._labels = self.balance()
 
       # start next epoch
       start = 0
@@ -99,14 +103,16 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
   # process a single file's data into usable arrays
   def process_data(data):
     stock_set = np.zeros([0,moving_window,columns])
-    label_set = np.zeros([0,2])
-    for idx in range(data.shape[0] - (moving_window + 5)):
+    label_set = np.zeros([0,3])
+    for idx in range(data.shape[0] - (moving_window + 3)):
       stock_set = np.concatenate((stock_set, np.expand_dims(data[range(idx,idx+(moving_window)),:], axis=0)), axis=0)
 
-      if data[idx+(moving_window+5),3] > data[idx+(moving_window),3]:
-        lbl = [[1.0, 0.0]]
+      if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*1.03:
+        lbl = [[1.0, 0.0, 0.0]]
+      elif data[idx+(moving_window+3),3]*1.03 <= data[idx+(moving_window),3]:
+        lbl = [[0.0, 1.0, 0.0]]
       else:
-        lbl = [[0.0, 1.0]]
+        lbl = [[0.0, 0.0, 1.0]]
       label_set = np.concatenate((label_set, lbl), axis=0)
       # label_set = np.concatenate((label_set, np.array([data[idx+(moving_window+5),3] - data[idx+(moving_window),3]])))
     # print(stock_set.shape, label_set.shape)
@@ -114,7 +120,7 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
 
   # read a directory of data
   stocks_set = np.zeros([0,moving_window,columns])
-  labels_set = np.zeros([0,2])
+  labels_set = np.zeros([0,3])
   for dir_item in os.listdir(path):
     dir_item_path = os.path.join(path, dir_item)
     if os.path.isfile(dir_item_path):
@@ -128,6 +134,9 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
   np.random.shuffle(perm)
   stocks_set = stocks_set[perm]
   labels_set = labels_set[perm]
+
+  labels = np.argmax(labels_set, axis=1)
+  print 'labels hist', np.histogram(labels, bins=[0,1,2,3])
 
   # normalize the data
   stocks_set_ = np.zeros(stocks_set.shape)

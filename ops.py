@@ -69,8 +69,7 @@ def batchnorm(input, name="batchnorm", is_2d=False):
     channels = input.get_shape()[-1]
     offset = tf.get_variable("offset", [channels],
                               dtype=tf.float32,
-                              #initializer=tf.zeros_initializer())
-                              initializer=tf.constant_initializer(0.0))
+                              initializer=tf.zeros_initializer())
 
     scale = tf.get_variable("scale", [channels],
                             dtype=tf.float32,
