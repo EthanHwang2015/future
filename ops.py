@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 import tensorflow as tf
 import math
 import numpy as np

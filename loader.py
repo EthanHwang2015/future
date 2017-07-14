@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 import tensorflow as tf
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import random_seed
@@ -47,7 +49,7 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
-  def balance(self, weights=[10,10,1]):
+  def balance(self, weights=[9,9,1]):
     ys = np.argmax(self._org_labels, axis=1)
     p = np.zeros(len(ys))
     for i, weight in enumerate(weights):
@@ -107,9 +109,9 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
     for idx in range(data.shape[0] - (moving_window + 3)):
       stock_set = np.concatenate((stock_set, np.expand_dims(data[range(idx,idx+(moving_window)),:], axis=0)), axis=0)
 
-      if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*1.03:
+      if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*1.01:
         lbl = [[1.0, 0.0, 0.0]]
-      elif data[idx+(moving_window+3),3]*1.03 <= data[idx+(moving_window),3]:
+      elif data[idx+(moving_window+3),3]*1.01 <= data[idx+(moving_window),3]:
         lbl = [[0.0, 1.0, 0.0]]
       else:
         lbl = [[0.0, 0.0, 1.0]]
@@ -165,5 +167,5 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
 # print(images, labels)
 if __name__ == '__main__':
   db = load_stock_data("data/")
-  images, labels = db.train.next_batch(10)
+  images, labels = db.train.next_batch(64)
 

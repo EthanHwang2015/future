@@ -1,5 +1,6 @@
 import argparse
 import sys
+sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 
 import tensorflow as tf
 import functools
@@ -185,9 +186,9 @@ def main():
   with tf.Session(config=config) as sess:
     sess.run(tf.global_variables_initializer())
     for i in range(500000):
-      images, labels = db.train.next_batch(32)
+      images, labels = db.train.next_batch(64)
       if i % 100 == 0:
-        images_eval, labels_eval = db.test.next_batch(1000)
+        images_eval, labels_eval = db.test.next_batch(2000,False)
         accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
         loss = sess.run(model.p_loss, {image: images_eval, label: labels_eval, dropout: 1.0})
         pred = sess.run(model.prediction, {image: images_eval, label: labels_eval, dropout: 1.0})
@@ -204,7 +205,7 @@ def main():
         save_path_full = os.path.join(save_path, model_name)
         saver.save(sess, save_path_full, global_step=i+1)
 
-    images_eval, labels_eval = db.test.next_batch(1000)
+    images_eval, labels_eval = db.test.next_batch(2000,False)
     accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
     print('final accuracy on testing set: %g' % (accuracy))
   print("finished")
