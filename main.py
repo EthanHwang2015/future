@@ -76,7 +76,7 @@ class Model:
 
       # conv_1 [batch, ngf, 5] => [batch, 64, ngf]
       with tf.variable_scope("conv_1"):
-        output = relu(conv1d(input_image, self.filter_num, name='conv_1'))
+        output = relu(conv1d(input_image, self.filter_num, name='conv_1', stddev=np.sqrt(2.0/self.filter_num)))
         layers.append(output)
 
       # conv_2 - conv_6
@@ -94,7 +94,7 @@ class Model:
           rectified = lrelu(layers[-1], 0.2)
 
           # [batch, in_width, in_channels] => [batch, in_width/2, out_channels]
-          convolved = conv1d(rectified, out_channels)
+          convolved = conv1d(rectified, out_channels, stddev=np.sqrt(2.0/out_channels))
 
           # batchnormalize convolved
           output = batchnorm(convolved, is_2d=False)
@@ -197,7 +197,7 @@ def main():
         print('confusion\n {}\n'.format(confusion))
       sess.run(model.optimize, {image: images, label: labels, dropout: 0.5})
 
-      if i % 10000 == 0:
+      if i > 100 and i % 10000 == 0:
         save_path = 'checkpoints/'
         model_name = 'stocks_model.ckpt'
         if not os.path.exists(save_path):
