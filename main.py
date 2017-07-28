@@ -1,5 +1,8 @@
+#encoding=utf8
 import argparse
 import sys
+reload(sys) 
+sys.setdefaultencoding("utf-8")
 sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 
 import tensorflow as tf
@@ -169,7 +172,8 @@ def cal_kappa(y, pred, nclasses=3):
 
 def main():
   # Import data
-  db = load_stock_data("data/")
+  #db = load_stock_data("data/")
+  db = load_stock_data("data/rb000(30分钟).csv")
 
   # Construct graph
   image = tf.placeholder(tf.float32, [None, 128, 6])
@@ -204,6 +208,7 @@ def main():
           os.makedirs(save_path)
         save_path_full = os.path.join(save_path, model_name)
         saver.save(sess, save_path_full, global_step=i+1)
+        exit(0)
 
     images_eval, labels_eval = db.test.next_batch(2000,False)
     accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})

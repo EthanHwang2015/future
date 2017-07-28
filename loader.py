@@ -1,4 +1,7 @@
+#encoding=utf8
 import sys
+reload(sys) 
+sys.setdefaultencoding("utf-8")
 sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 import tensorflow as tf
 from tensorflow.python.framework import dtypes
@@ -49,7 +52,7 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
-  def balance(self, weights=[9,9,1]):
+  def balance(self, weights=[10,10,1]): ##rb 1hour [5,5,1]
     ys = np.argmax(self._org_labels, axis=1)
     p = np.zeros(len(ys))
     for i, weight in enumerate(weights):
@@ -102,6 +105,7 @@ def load_csv(fname, col_start=1, row_start=0, delimiter=",", dtype=dtypes.float3
 
 # stock data loading
 def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
+  rate = 1.009
   # process a single file's data into usable arrays
   def process_data(data):
     stock_set = np.zeros([0,moving_window,columns])
@@ -109,9 +113,13 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
     for idx in range(data.shape[0] - (moving_window + 3)):
       stock_set = np.concatenate((stock_set, np.expand_dims(data[range(idx,idx+(moving_window)),:], axis=0)), axis=0)
 
-      if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*1.01:
+      if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*rate or\
+          data[idx+(moving_window+2),3] >= data[idx+(moving_window),3]*rate or\
+          data[idx+(moving_window+1),3] >= data[idx+(moving_window),3]*rate :
         lbl = [[1.0, 0.0, 0.0]]
-      elif data[idx+(moving_window+3),3]*1.01 <= data[idx+(moving_window),3]:
+      elif data[idx+(moving_window+3),3]*rate <= data[idx+(moving_window),3] or\
+          data[idx+(moving_window+2),3]*rate <= data[idx+(moving_window),3] or\
+          data[idx+(moving_window+1),3]*rate <= data[idx+(moving_window),3] :
         lbl = [[0.0, 1.0, 0.0]]
       else:
         lbl = [[0.0, 0.0, 1.0]]
@@ -123,13 +131,11 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
   # read a directory of data
   stocks_set = np.zeros([0,moving_window,columns])
   labels_set = np.zeros([0,3])
-  for dir_item in os.listdir(path):
-    dir_item_path = os.path.join(path, dir_item)
-    if os.path.isfile(dir_item_path):
-      print(dir_item_path)
-      ss, ls = process_data(load_csv(dir_item_path))
-      stocks_set = np.concatenate((stocks_set, ss), axis=0)
-      labels_set = np.concatenate((labels_set, ls), axis=0)
+  if os.path.isfile(path):
+    print(path)
+    ss, ls = process_data(load_csv(path))
+    stocks_set = np.concatenate((stocks_set, ss), axis=0)
+    labels_set = np.concatenate((labels_set, ls), axis=0)
 
   # shuffling the data
   perm = np.arange(labels_set.shape[0])
@@ -166,6 +172,6 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
 # print(images.shape, labels.shape)
 # print(images, labels)
 if __name__ == '__main__':
-  db = load_stock_data("data/")
+  db = load_stock_data("data/rb000(30分钟).csv")
   images, labels = db.train.next_batch(64)
 
