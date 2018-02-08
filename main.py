@@ -173,7 +173,10 @@ def cal_kappa(y, pred, nclasses=3):
 def main():
   # Import data
   #db = load_stock_data("data/")
-  db = load_stock_data("data/rb000(30分钟).csv")
+  name = 'rb888_day'
+  db = load_stock_data("datas/{}.csv".format(name))
+  save_path = 'checkpoints/'
+  model_name = '{}_best_validation.ckpt'.format(name)
 
   # Construct graph
   image = tf.placeholder(tf.float32, [None, 128, 6])
@@ -184,6 +187,11 @@ def main():
   # Saver
   saver = tf.train.Saver()
 
+  improved_str = ''
+  best_loss = 10000.0
+  required_improved = 1000
+  last_imporved = 0
+
   # Session
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True
@@ -192,25 +200,44 @@ def main():
     for i in range(500000):
       images, labels = db.train.next_batch(64)
       if i % 100 == 0:
-        images_eval, labels_eval = db.test.next_batch(2000,False)
-        accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
-        loss = sess.run(model.p_loss, {image: images_eval, label: labels_eval, dropout: 1.0})
-        pred = sess.run(model.prediction, {image: images_eval, label: labels_eval, dropout: 1.0})
-        print('step %d, accuracy %g, loss %g, kappa %g' % (i, accuracy, loss, cal_kappa(np.argmax(labels_eval, axis=1), np.argmax(pred, axis=1))))
+        #train accuracy
+        accuracy = sess.run(model.accuracy, {image: images, label: labels, dropout: 1.0})
+        loss = sess.run(model.p_loss, {image: images, label: labels, dropout: 1.0})
+        pred = sess.run(model.prediction, {image: images, label: labels, dropout: 1.0})
+        print('step %d, train: accuracy %g, loss %g, kappa %g' % (i, accuracy, loss, cal_kappa(np.argmax(labels, axis=1), np.argmax(pred, axis=1))))
+        confusion = sess.run(model.confusion, {image: images, label: labels, dropout: 1.0})
+        print('confusion\n {}\n'.format(confusion))
+
+        #valid accuracy 
+        images_eval, labels_eval = db.test.next_batch(1000,False)
+        eval_accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
+        eval_loss = sess.run(model.p_loss, {image: images_eval, label: labels_eval, dropout: 1.0})
+        eval_pred = sess.run(model.prediction, {image: images_eval, label: labels_eval, dropout: 1.0})
+
+        if eval_loss < best_loss:
+          best_loss = eval_loss
+          improved_str = '*'
+          last_improved = i
+
+          if not os.path.exists(save_path):
+            os.makedirs(save_path)
+          save_path_full = os.path.join(save_path, model_name)
+          saver.save(sess, save_path_full)
+     
+        else:
+          improved_str=''
+        print('step %d, valid: accuracy %g, loss %g, kappa %g %s' % (i, eval_accuracy, eval_loss, cal_kappa(np.argmax(labels_eval, axis=1), np.argmax(eval_pred, axis=1)), improved_str))
         confusion = sess.run(model.confusion, {image: images_eval, label: labels_eval, dropout: 1.0})
         print('confusion\n {}\n'.format(confusion))
+
+
       sess.run(model.optimize, {image: images, label: labels, dropout: 0.5})
 
-      if i > 100 and i % 10000 == 0:
-        save_path = 'checkpoints/'
-        model_name = 'stocks_model.ckpt'
-        if not os.path.exists(save_path):
-          os.makedirs(save_path)
-        save_path_full = os.path.join(save_path, model_name)
-        saver.save(sess, save_path_full, global_step=i+1)
-        exit(0)
+      if (i-last_improved) > required_improved:
+          break
+       #exit(0)
 
-    images_eval, labels_eval = db.test.next_batch(2000,False)
+    images_eval, labels_eval = db.test.next_batch(1000,False)
     accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
     print('final accuracy on testing set: %g' % (accuracy))
   print("finished")

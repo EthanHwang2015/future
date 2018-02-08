@@ -52,7 +52,7 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
-  def balance(self, weights=[10,10,1]): ##rb 1hour [5,5,1]
+  def balance(self, weights=[3,3,1]): ##rb 1hour [5,5,1]
     ys = np.argmax(self._org_labels, axis=1)
     p = np.zeros(len(ys))
     for i, weight in enumerate(weights):
@@ -104,8 +104,8 @@ def load_csv(fname, col_start=1, row_start=0, delimiter=",", dtype=dtypes.float3
   return data
 
 # stock data loading
-def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=4.0):
-  rate = 1.009
+def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0):
+  rate = 1.02
   # process a single file's data into usable arrays
   def process_data(data):
     stock_set = np.zeros([0,moving_window,columns])

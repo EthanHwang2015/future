@@ -57,9 +57,10 @@ def load_predict_data(path, moving_window=128, columns=6):
   return results
 
 if __name__ == '__main__':
+  #key is date
   key = sys.argv[1]
   #test_datas = load_predict_data('./rb1710/rb1710(1小时).csv')
-  test_datas = load_predict_data('./rb1710/MA1709(1小时).csv')
+  test_datas = load_predict_data('./datas/rb1805_1hour.csv')
   imgs = np.expand_dims(test_datas[key], axis=0)
   print imgs.shape
 
