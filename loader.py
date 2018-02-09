@@ -19,6 +19,7 @@ class DataSet(object):
   def __init__(self,
                images,
                labels,
+               weights,
                dtype=dtypes.float32,
                seed=None):
 
@@ -31,6 +32,7 @@ class DataSet(object):
     self._epochs_completed = 0
     self._index_in_epoch = 0
     self._total_batches = images.shape[0]
+    self.weights = weights
 
   def check_data(self, images, labels):
     assert images.shape[0] == labels.shape[0], (
@@ -52,10 +54,10 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
-  def balance(self, weights=[3,3,1]): ##rb 1hour [5,5,1]
+  def balance(self): ##rb 1hour [5,5,1]
     ys = np.argmax(self._org_labels, axis=1)
     p = np.zeros(len(ys))
-    for i, weight in enumerate(weights):
+    for i, weight in enumerate(self.weights):
       p[ys==i] = weight
     perm = np.random.choice(np.arange(len(ys)), size=len(ys), replace=True, p=np.array(p)/p.sum())
     return self._org_images[perm], self._org_labels[perm]
@@ -104,8 +106,7 @@ def load_csv(fname, col_start=1, row_start=0, delimiter=",", dtype=dtypes.float3
   return data
 
 # stock data loading
-def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0):
-  rate = 1.02
+def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0, rate = 1.02):
   # process a single file's data into usable arrays
   def process_data(data):
     stock_set = np.zeros([0,moving_window,columns])
@@ -144,7 +145,8 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0):
   labels_set = labels_set[perm]
 
   labels = np.argmax(labels_set, axis=1)
-  print 'labels hist', np.histogram(labels, bins=[0,1,2,3])
+  label_hist = np.histogram(labels, bins=[0,1,2,3])[0]
+  print 'labels hist', label_hist
 
   # normalize the data
   stocks_set_ = np.zeros(stocks_set.shape)
@@ -162,8 +164,11 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0):
   test_stocks = stocks_set[:train_test_idx,:,:]
   test_labels = labels_set[:train_test_idx]
 
-  train = DataSet(train_stocks, train_labels)
-  test = DataSet(test_stocks, test_labels)
+  max_ = np.max(label_hist)
+  weights = np.ceil(max_*1.0/label_hist).tolist()
+  print 'weights', weights
+  train = DataSet(train_stocks, train_labels, weights)
+  test = DataSet(test_stocks, test_labels, weights)
 
   return base.Datasets(train=train, validation=None, test=test)
 

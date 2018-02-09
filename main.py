@@ -47,6 +47,8 @@ class Model:
     image,
     label,
     dropout=0.5,
+    learn_rate = 0.001,
+
     conv_size=9,
     conv_stride=1,
     ksize=2,
@@ -57,6 +59,7 @@ class Model:
     self.image = image
     self.label = label
     self.dropout = dropout
+    self.learn_rate = learn_rate
 
     self.conv_size = conv_size
     self.conv_stride = conv_stride
@@ -123,7 +126,8 @@ class Model:
   def optimize(self):
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.label,
       logits=self.prediction))
-    return tf.train.AdamOptimizer(0.0001).minimize(cross_entropy)
+    return tf.train.AdamOptimizer(self.learn_rate).minimize(cross_entropy)
+    #return tf.train.MomentumOptimizer(self.learn_rate, 0.9).minimize(cross_entropy)
 
   @define_scope
   def accuracy(self):
@@ -173,8 +177,8 @@ def cal_kappa(y, pred, nclasses=3):
 def main():
   # Import data
   #db = load_stock_data("data/")
-  name = 'rb888_day'
-  db = load_stock_data("datas/{}.csv".format(name))
+  name = 'rb888_15min'
+  db = load_stock_data("datas/{}.csv".format(name), rate=1.006)
   save_path = 'checkpoints/'
   model_name = '{}_best_validation.ckpt'.format(name)
 
@@ -182,7 +186,10 @@ def main():
   image = tf.placeholder(tf.float32, [None, 128, 6])
   label = tf.placeholder(tf.float32, [None, 3])
   dropout = tf.placeholder(tf.float32)
-  model = Model(image, label, dropout=dropout)
+
+  learn_rate = 0.0001
+
+  model = Model(image, label, dropout=dropout, learn_rate = learn_rate)
 
   # Saver
   saver = tf.train.Saver()
@@ -234,6 +241,11 @@ def main():
       sess.run(model.optimize, {image: images, label: labels, dropout: 0.5})
 
       if (i-last_improved) > required_improved:
+        if model.learn_rate > 1e-5:
+          model.learn_rate = model.learn_rate * 0.1
+          print('adjust learn rate to : %g' % (model.learn_rate))
+          last_improved = i
+        else:
           break
        #exit(0)
 
