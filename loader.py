@@ -2,7 +2,7 @@
 import sys
 reload(sys) 
 sys.setdefaultencoding("utf-8")
-sys.path.insert(0, '/home/healthai/tensorflow-1.0')
+#sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 import tensorflow as tf
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import random_seed
@@ -54,6 +54,13 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
+  def shuffle(self):
+    perm = np.arange(self._org_labels.shape[0])
+    np.random.shuffle(perm)
+    return self._org_images[perm], self._org_labels[perm]
+
+
+ 
   def balance(self): ##rb 1hour [5,5,1]
     ys = np.argmax(self._org_labels, axis=1)
     p = np.zeros(len(ys))
@@ -67,7 +74,9 @@ class DataSet(object):
 
     # first epoch shuffle
     if self._epochs_completed == 0 and start == 0 and shuffle:
-      self._images, self._labels = self.balance()
+      #self._images, self._labels = self.balance()
+      self._images, self._labels = self.shuffle()
+
 
     # next epoch
     if start + batch_size <= self._total_batches:
@@ -86,7 +95,8 @@ class DataSet(object):
 
       # shuffle for new epoch
       if shuffle:
-        self._images, self._labels = self.balance()
+        #self._images, self._labels = self.balance()
+        self._images, self._labels = self.shuffle()
 
       # start next epoch
       start = 0
@@ -114,12 +124,12 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0, ra
     for idx in range(data.shape[0] - (moving_window + 3)):
       stock_set = np.concatenate((stock_set, np.expand_dims(data[range(idx,idx+(moving_window)),:], axis=0)), axis=0)
 
-      if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*rate or\
-          data[idx+(moving_window+2),3] >= data[idx+(moving_window),3]*rate or\
+#     if data[idx+(moving_window+3),3] >= data[idx+(moving_window),3]*rate or\
+      if data[idx+(moving_window+2),3] >= data[idx+(moving_window),3]*rate or\
           data[idx+(moving_window+1),3] >= data[idx+(moving_window),3]*rate :
         lbl = [[1.0, 0.0, 0.0]]
-      elif data[idx+(moving_window+3),3]*rate <= data[idx+(moving_window),3] or\
-          data[idx+(moving_window+2),3]*rate <= data[idx+(moving_window),3] or\
+#     elif data[idx+(moving_window+3),3]*rate <= data[idx+(moving_window),3] or\
+      elif data[idx+(moving_window+2),3]*rate <= data[idx+(moving_window),3] or\
           data[idx+(moving_window+1),3]*rate <= data[idx+(moving_window),3] :
         lbl = [[0.0, 1.0, 0.0]]
       else:
@@ -153,6 +163,7 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0, ra
   for i in range(len(stocks_set)):
     min = stocks_set[i].min(axis=0)
     max = stocks_set[i].max(axis=0)
+#    print i,min,max
     stocks_set_[i] = (stocks_set[i] - min) / (max - min)
   stocks_set = stocks_set_
   # labels_set = np.transpose(labels_set)
@@ -166,17 +177,22 @@ def load_stock_data(path, moving_window=128, columns=6, train_test_ratio=9.0, ra
 
   max_ = np.max(label_hist)
   weights = np.ceil(max_*1.0/label_hist).tolist()
+  weights = weights/np.max(weights)
   print 'weights', weights
+  print train_stocks.shape
+  print train_labels.shape
   train = DataSet(train_stocks, train_labels, weights)
   test = DataSet(test_stocks, test_labels, weights)
 
-  return base.Datasets(train=train, validation=None, test=test)
+  return base.Datasets(train=train, validation=None, test=test), weights
 
 # db = load_stock_data("data/short/")
 # images, labels = db.train.next_batch(10)
 # print(images.shape, labels.shape)
 # print(images, labels)
 if __name__ == '__main__':
-  db = load_stock_data("data/rb000(30分钟).csv")
+#  db = load_stock_data("data/rb000(30分钟).csv")
+  name = 'i9888_60min'
+  db, _ = load_stock_data("data20190508/{}.csv".format(name), rate=1.01)
   images, labels = db.train.next_batch(64)
 

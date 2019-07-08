@@ -3,13 +3,14 @@ import argparse
 import sys
 reload(sys) 
 sys.setdefaultencoding("utf-8")
-sys.path.insert(0, '/home/healthai/tensorflow-1.0')
+#sys.path.insert(0, '/home/healthai/tensorflow-1.0')
 
 import tensorflow as tf
 import functools
 
 from ops import *
 from loader import *
+import sklearn
 
 def doublewrap(function):
   @functools.wraps(function)
@@ -54,7 +55,10 @@ class Model:
     ksize=2,
     pool_stride=2,
     filter_num=128,
-    padding="SAME"):
+    padding="SAME",
+    class_weight = [5.0,5.0,1.0]):
+
+    self.class_weight = class_weight
 
     self.image = image
     self.label = label
@@ -87,11 +91,11 @@ class Model:
 
       # conv_2 - conv_6
       layer_specs = [
-        (self.filter_num * 2, 0.5),  # conv_2: [batch, 64, ngf] => [batch, 32, ngf * 2]
-        (self.filter_num * 4, 0.5),  # conv_3: [batch, 32, ngf * 2] => [batch, 16, ngf * 4]
-        (self.filter_num * 8, 0.5),  # conv_4: [batch, 16, ngf * 4] => [batch, 8, ngf * 8]
-        (self.filter_num * 8, 0.5),  # conv_5: [batch, 8, ngf * 8] => [batch, 4, ngf * 8]
-        (self.filter_num * 8, 0.5)  # conv_6: [batch, 4, ngf * 8] => [batch, 2, ngf * 8]
+        (self.filter_num * 2, self.dropout),  # conv_2: [batch, 64, ngf] => [batch, 32, ngf * 2]
+        (self.filter_num * 4, self.dropout),  # conv_3: [batch, 32, ngf * 2] => [batch, 16, ngf * 4]
+        (self.filter_num * 8, self.dropout),  # conv_4: [batch, 16, ngf * 4] => [batch, 8, ngf * 8]
+        (self.filter_num * 8, self.dropout),  # conv_5: [batch, 8, ngf * 8] => [batch, 4, ngf * 8]
+        (self.filter_num * 8, self.dropout)  # conv_6: [batch, 4, ngf * 8] => [batch, 2, ngf * 8]
       ]
 
       # adding layers
@@ -107,7 +111,7 @@ class Model:
 
           # dropout
           if dropout > 0.0:
-            output = tf.nn.dropout(output, keep_prob=1 - dropout)
+            output = tf.nn.dropout(output, keep_prob=dropout)
 
           layers.append(output)
 
@@ -115,19 +119,53 @@ class Model:
       h_fc1 = relu(fully_connected(layers[-1], 256, name='fc1'))
 
       #dropout
-      h_fc1_drop = tf.nn.dropout(h_fc1, self.dropout)
+      h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob=self.dropout)
 
       #fc2
-      result = tf.sigmoid(fully_connected(h_fc1_drop, 3, name='fc2'))
+      result = tf.nn.softmax(fully_connected(h_fc1_drop, 3, name='fc2'))
 
       return result
 
+  def focal_loss2(self, logits, labels, alpha=0.25, gamma=2):
+    sigmoid_p = tf.nn.sigmoid(logits)
+    zeros = tf.zeros_like(sigmoid_p)
+    pos_p_sub = tf.where(labels > zeros, labels - sigmoid_p, zeros)
+
+    neg_p_sub = tf.where(labels > zeros, zeros, sigmoid_p)
+
+    ce = -alpha * (pos_p_sub ** gamma) * tf.log(tf.clip_by_value(sigmoid_p, 1e-8, 1.0)) \
+         - (1 - alpha) * (neg_p_sub ** gamma) * tf.log(tf.clip_by_value(1.0 - sigmoid_p, 1e-8, 1.0))
+    return tf.reduce_sum(ce)
+
+  def focal_loss(self, logits, labels, alpha=0.25, gamma=2):
+    #ce_loss = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits = logits)
+    probs = tf.nn.softmax(logits)
+
+    ce = tf.multiply(labels, -tf.log(probs))
+
+    #alpha should be set up by data distributiopn
+    alpha = tf.convert_to_tensor(self.class_weight, dtype=probs.dtype)
+
+    probs_t = tf.where(labels > 0, probs, 1.0 - probs)
+
+    weight = tf.pow(tf.subtract(1.0, probs_t), gamma)
+
+    fl = tf.multiply(alpha, tf.multiply(weight, ce))
+
+    loss = tf.reduce_mean(fl)
+
+    return loss
+
+
   @define_scope
   def optimize(self):
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.label,
-      logits=self.prediction))
-    return tf.train.AdamOptimizer(self.learn_rate).minimize(cross_entropy)
+#cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.label,
+#      logits=self.prediction))
+#    return tf.train.AdamOptimizer(self.learn_rate).minimize(cross_entropy)
     #return tf.train.MomentumOptimizer(self.learn_rate, 0.9).minimize(cross_entropy)
+    loss = self.focal_loss(self.prediction, self.label)
+
+    return tf.train.AdamOptimizer(self.learn_rate).minimize(loss)
 
   @define_scope
   def accuracy(self):
@@ -146,9 +184,12 @@ class Model:
 
   @define_scope
   def p_loss(self):
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.label,
-      logits=self.prediction))
-    return cross_entropy
+#cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.label,
+#      logits=self.prediction))
+#    return cross_entropy
+    loss = self.focal_loss(self.prediction, self.label)
+    return loss
+
 
   @define_scope
   def confusion(self):
@@ -177,8 +218,8 @@ def cal_kappa(y, pred, nclasses=3):
 def main():
   # Import data
   #db = load_stock_data("data/")
-  name = 'rb888_15min'
-  db = load_stock_data("datas/{}.csv".format(name), rate=1.006)
+  name = 'i9888_60min'
+  db, class_weight = load_stock_data("data20190508/{}.csv".format(name), rate=1.01)
   save_path = 'checkpoints/'
   model_name = '{}_best_validation.ckpt'.format(name)
 
@@ -187,17 +228,17 @@ def main():
   label = tf.placeholder(tf.float32, [None, 3])
   dropout = tf.placeholder(tf.float32)
 
-  learn_rate = 0.0001
+  learn_rate = 1e-4
 
-  model = Model(image, label, dropout=dropout, learn_rate = learn_rate)
+  model = Model(image, label, dropout=dropout, learn_rate = learn_rate, class_weight=class_weight)
 
   # Saver
   saver = tf.train.Saver()
 
   improved_str = ''
   best_loss = 10000.0
-  required_improved = 1000
-  last_imporved = 0
+  required_improved = 500
+  last_improved = 0
 
   # Session
   config = tf.ConfigProto()
@@ -205,8 +246,10 @@ def main():
   with tf.Session(config=config) as sess:
     sess.run(tf.global_variables_initializer())
     for i in range(500000):
-      images, labels = db.train.next_batch(64)
+      images, labels = db.train.next_batch(128)
+      print "step {}".format(i)
       if i % 100 == 0:
+#if i > 0:
         #train accuracy
         accuracy = sess.run(model.accuracy, {image: images, label: labels, dropout: 1.0})
         loss = sess.run(model.p_loss, {image: images, label: labels, dropout: 1.0})
@@ -221,7 +264,40 @@ def main():
         eval_loss = sess.run(model.p_loss, {image: images_eval, label: labels_eval, dropout: 1.0})
         eval_pred = sess.run(model.prediction, {image: images_eval, label: labels_eval, dropout: 1.0})
 
+        f = 0.5
+        pred0 = np.argmax(eval_pred, axis=1)
+        true0 = np.argmax(labels_eval, axis=1)
+        rep = sklearn.metrics.classification_report(true0, pred0)
+        print("{}, {}".format(f, rep))
+
+
+        f = 0.7
+        pred0 = np.argmax(np.where(eval_pred > f, 1, 0), axis=1)
+        true0 = np.argmax(labels_eval, axis=1)
+        rep = sklearn.metrics.classification_report(true0, pred0)
+
+        print("{}, {}".format(f, rep))
+
+        f = 0.8
+        pred0 = np.argmax(np.where(eval_pred > f, 1, 0), axis=1)
+        true0 = np.argmax(labels_eval, axis=1)
+        rep = sklearn.metrics.classification_report(true0, pred0)
+
+        print("{}, {}".format(f, rep))
+
+
+        f = 0.9
+        pred0 = np.argmax(np.where(eval_pred > f, 1, 0), axis=1)
+        true0 = np.argmax(labels_eval, axis=1)
+        rep = sklearn.metrics.classification_report(true0, pred0)
+
+        print("{}, {}".format(f, rep))
+
+
+
+
         if eval_loss < best_loss:
+#if eval_loss < 0:
           best_loss = eval_loss
           improved_str = '*'
           last_improved = i
