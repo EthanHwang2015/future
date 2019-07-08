@@ -4,6 +4,7 @@ import pymongo
 from datetime import datetime, time
 import pdb
 
+
 def datetime2str(dt):
     return dt.strftime("%Y/%m/%d %H:%M")
 

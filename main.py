@@ -110,8 +110,7 @@ class Model:
           output = batchnorm(convolved, is_2d=False)
 
           # dropout
-          if dropout > 0.0:
-            output = tf.nn.dropout(output, keep_prob=dropout)
+          output = tf.nn.dropout(output, keep_prob=dropout)
 
           layers.append(output)
 
