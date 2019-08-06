@@ -235,8 +235,8 @@ def main():
   saver = tf.train.Saver()
 
   improved_str = ''
-  best_loss = 10000.0
-  required_improved = 500
+  best_loss = 0.0
+  required_improved = 1000
   last_improved = 0
 
   # Session
@@ -253,7 +253,8 @@ def main():
         accuracy = sess.run(model.accuracy, {image: images, label: labels, dropout: 1.0})
         loss = sess.run(model.p_loss, {image: images, label: labels, dropout: 1.0})
         pred = sess.run(model.prediction, {image: images, label: labels, dropout: 1.0})
-        print('step %d, train: accuracy %g, loss %g, kappa %g' % (i, accuracy, loss, cal_kappa(np.argmax(labels, axis=1), np.argmax(pred, axis=1))))
+        kappa_train = cal_kappa(np.argmax(labels, axis=1), np.argmax(pred, axis=1))
+        print('step %d, train: accuracy %g, loss %g, kappa %g' % (i, accuracy, loss, kappa_train))
         confusion = sess.run(model.confusion, {image: images, label: labels, dropout: 1.0})
         print('confusion\n {}\n'.format(confusion))
 
@@ -262,6 +263,7 @@ def main():
         eval_accuracy = sess.run(model.accuracy, {image: images_eval, label: labels_eval, dropout: 1.0})
         eval_loss = sess.run(model.p_loss, {image: images_eval, label: labels_eval, dropout: 1.0})
         eval_pred = sess.run(model.prediction, {image: images_eval, label: labels_eval, dropout: 1.0})
+        kappa_eval = cal_kappa(np.argmax(labels_eval, axis=1), np.argmax(eval_pred, axis=1))
 
         f = 0.5
         pred0 = np.argmax(eval_pred, axis=1)
@@ -295,9 +297,9 @@ def main():
 
 
 
-        if eval_loss < best_loss:
+        if kappa_eval > best_loss:
 #if eval_loss < 0:
-          best_loss = eval_loss
+          best_loss = kappa_eval
           improved_str = '*'
           last_improved = i
 
@@ -308,7 +310,7 @@ def main():
      
         else:
           improved_str=''
-        print('step %d, valid: accuracy %g, loss %g, kappa %g %s' % (i, eval_accuracy, eval_loss, cal_kappa(np.argmax(labels_eval, axis=1), np.argmax(eval_pred, axis=1)), improved_str))
+        print('step %d, valid: accuracy %g, loss %g, kappa %g %s' % (i, eval_accuracy, eval_loss, kappa_eval, improved_str))
         confusion = sess.run(model.confusion, {image: images_eval, label: labels_eval, dropout: 1.0})
         print('confusion\n {}\n'.format(confusion))
 
